@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiFetch } from '../lib/supabase';
 import type { MoodEntry } from '../types';
 import { MoodForm } from '../components/MoodForm';
 import { MoodCalendar } from '../components/MoodCalendar';
@@ -7,6 +6,20 @@ import { YearlyMoodView } from '../components/YearlyMoodView';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { PenLine, CalendarDays, Trash2, Sun, Sunset, Moon, LayoutGrid, Calendar } from 'lucide-react';
+
+const MOOD_KEY = 'local_mood_entries';
+
+function getLocalMoodEntries(): MoodEntry[] {
+  try {
+    return JSON.parse(localStorage.getItem(MOOD_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalMoodEntries(list: MoodEntry[]) {
+  localStorage.setItem(MOOD_KEY, JSON.stringify(list));
+}
 
 const PERIOD_META: Record<string, { label: string; icon: typeof Sun; color: string }> = {
   morning: { label: '上午', icon: Sun, color: 'text-amber-500' },
@@ -21,34 +34,42 @@ export function Mood() {
   const [, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'month' | 'year'>('month');
 
-  const fetchEntries = useCallback(async () => {
-    try {
-      const res = await apiFetch('/api/mood');
-      setEntries(res.entries || []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+  const fetchEntries = useCallback(() => {
+    setEntries(getLocalMoodEntries());
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     fetchEntries();
   }, [fetchEntries]);
 
-  const handleSubmit = async (data: Partial<MoodEntry>) => {
-    await apiFetch('/api/mood', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  const handleSubmit = (data: Partial<MoodEntry>) => {
+    const list = getLocalMoodEntries();
+    const idx = list.findIndex((e) => e.date === data.date);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], ...data } as MoodEntry;
+    } else {
+      const newEntry: MoodEntry = {
+        id: `mood-${Date.now()}`,
+        user_id: '',
+        date: data.date || format(new Date(), 'yyyy-MM-dd'),
+        mood_score: data.mood_score ?? 0,
+        events: data.events || [],
+        note: data.note || '',
+        created_at: new Date().toISOString(),
+      };
+      list.push(newEntry);
+    }
+    saveLocalMoodEntries(list);
     setShowForm(false);
     fetchEntries();
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!selectedEntry) return;
     if (!confirm('确定删除这条心情记录吗？')) return;
-    await apiFetch(`/api/mood?id=${selectedEntry.id}`, { method: 'DELETE' });
+    const list = getLocalMoodEntries().filter((e) => e.id !== selectedEntry.id);
+    saveLocalMoodEntries(list);
     setShowForm(false);
     fetchEntries();
   };

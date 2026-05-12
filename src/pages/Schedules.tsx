@@ -1,9 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiFetch } from '../lib/supabase';
 import type { Schedule } from '../types';
 import { ScheduleForm } from '../components/ScheduleForm';
 import { ScheduleList } from '../components/ScheduleList';
 import { Plus, X } from 'lucide-react';
+
+const SCHEDULES_KEY = 'local_schedules';
+
+function getLocalSchedules(): Schedule[] {
+  try {
+    return JSON.parse(localStorage.getItem(SCHEDULES_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalSchedules(list: Schedule[]) {
+  localStorage.setItem(SCHEDULES_KEY, JSON.stringify(list));
+}
 
 export function Schedules() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -11,51 +24,59 @@ export function Schedules() {
   const [editing, setEditing] = useState<Schedule | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchSchedules = useCallback(async () => {
-    try {
-      const res = await apiFetch('/api/schedules');
-      setSchedules(res.schedules || []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+  const fetchSchedules = useCallback(() => {
+    setSchedules(getLocalSchedules());
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     fetchSchedules();
   }, [fetchSchedules]);
 
-  const handleCreate = async (data: Partial<Schedule>) => {
-    await apiFetch('/api/schedules', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  const handleCreate = (data: Partial<Schedule>) => {
+    const list = getLocalSchedules();
+    const newItem: Schedule = {
+      id: `local-${Date.now()}`,
+      user_id: '',
+      title: data.title || '',
+      description: data.description || '',
+      scheduled_at: data.scheduled_at || new Date().toISOString(),
+      reminder_minutes: data.reminder_minutes || 0,
+      is_completed: false,
+      created_at: new Date().toISOString(),
+    };
+    list.push(newItem);
+    saveLocalSchedules(list);
     setShowForm(false);
     fetchSchedules();
   };
 
-  const handleUpdate = async (data: Partial<Schedule>) => {
+  const handleUpdate = (data: Partial<Schedule>) => {
     if (!editing) return;
-    await apiFetch('/api/schedules', {
-      method: 'PUT',
-      body: JSON.stringify({ id: editing.id, ...data }),
-    });
+    const list = getLocalSchedules();
+    const idx = list.findIndex((s) => s.id === editing.id);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], ...data };
+      saveLocalSchedules(list);
+    }
     setEditing(null);
     fetchSchedules();
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!confirm('确定删除这个日程吗？')) return;
-    await apiFetch(`/api/schedules?id=${id}`, { method: 'DELETE' });
+    const list = getLocalSchedules().filter((s) => s.id !== id);
+    saveLocalSchedules(list);
     fetchSchedules();
   };
 
-  const handleToggleComplete = async (schedule: Schedule) => {
-    await apiFetch('/api/schedules', {
-      method: 'PUT',
-      body: JSON.stringify({ id: schedule.id, is_completed: !schedule.is_completed }),
-    });
+  const handleToggleComplete = (schedule: Schedule) => {
+    const list = getLocalSchedules();
+    const idx = list.findIndex((s) => s.id === schedule.id);
+    if (idx >= 0) {
+      list[idx].is_completed = !list[idx].is_completed;
+      saveLocalSchedules(list);
+    }
     fetchSchedules();
   };
 

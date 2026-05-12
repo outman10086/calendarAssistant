@@ -2,8 +2,23 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Send, Calendar, Smile } from 'lucide-react';
 import { parseIntent, formatIntentPreview } from '../lib/intentParser';
-import { apiFetch } from '../lib/supabase';
 import { format } from 'date-fns';
+
+const SCHEDULES_KEY = 'local_schedules';
+const MOOD_KEY = 'local_mood_entries';
+
+function getLocalSchedules() {
+  try { return JSON.parse(localStorage.getItem(SCHEDULES_KEY) || '[]'); } catch { return []; }
+}
+function saveLocalSchedules(list: any[]) {
+  localStorage.setItem(SCHEDULES_KEY, JSON.stringify(list));
+}
+function getLocalMoodEntries() {
+  try { return JSON.parse(localStorage.getItem(MOOD_KEY) || '[]'); } catch { return []; }
+}
+function saveLocalMoodEntries(list: any[]) {
+  localStorage.setItem(MOOD_KEY, JSON.stringify(list));
+}
 
 export function SmartInput() {
   const [text, setText] = useState('');
@@ -21,7 +36,7 @@ export function SmartInput() {
     }
   };
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(() => {
     if (!text.trim()) return;
     setLoading(true);
 
@@ -29,35 +44,45 @@ export function SmartInput() {
 
     try {
       if (intent.type === 'schedule') {
-        await apiFetch('/api/schedules', {
-          method: 'POST',
-          body: JSON.stringify({
-            title: intent.title || text.trim().slice(0, 20),
-            description: '',
-            scheduled_at: intent.scheduledAt
-              ? new Date(intent.scheduledAt).toISOString()
-              : new Date().toISOString(),
-            reminder_minutes: 0,
-          }),
+        const list = getLocalSchedules();
+        list.push({
+          id: `local-${Date.now()}`,
+          user_id: '',
+          title: intent.title || text.trim().slice(0, 20),
+          description: '',
+          scheduled_at: intent.scheduledAt
+            ? new Date(intent.scheduledAt).toISOString()
+            : new Date().toISOString(),
+          reminder_minutes: 0,
+          is_completed: false,
+          created_at: new Date().toISOString(),
         });
+        saveLocalSchedules(list);
         navigate('/schedules');
       } else if (intent.type === 'mood') {
         const date = intent.date || format(new Date(), 'yyyy-MM-dd');
-        const events = intent.events?.map((ev, idx) => ({
-          id: `smart-${idx}-${Date.now()}`,
+        const list = getLocalMoodEntries();
+        const idx = list.findIndex((e: any) => e.date === date);
+        const events = intent.events?.map((ev: any, i: number) => ({
+          id: `smart-${i}-${Date.now()}`,
           text: ev.text,
           period: ev.period || 'morning',
         })) || [];
 
-        await apiFetch('/api/mood', {
-          method: 'POST',
-          body: JSON.stringify({
+        if (idx >= 0) {
+          list[idx].events = [...(list[idx].events || []), ...events];
+        } else {
+          list.push({
+            id: `mood-${Date.now()}`,
+            user_id: '',
             date,
             mood_score: 0,
             events,
             note: '',
-          }),
-        });
+            created_at: new Date().toISOString(),
+          });
+        }
+        saveLocalMoodEntries(list);
         navigate('/mood');
       }
     } catch (e) {
