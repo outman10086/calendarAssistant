@@ -1,7 +1,7 @@
 import { adaptHandler } from '../_lib/netlifyAdapter.js';
 import { supabaseAdmin } from '../_lib/supabaseAdmin.js';
 
-async function handler(req: any, res: any) {
+async function routeHandler(req: any, res: any) {
   const userId = req.headers['x-user-id'] as string;
   if (!userId) {
     return res.status(401).json({ error: 'Missing user id' });
@@ -67,4 +67,4 @@ async function handler(req: any, res: any) {
   return res.status(405).json({ error: 'Method not allowed' });
 }
 
-export const handler = adaptHandler(handler);
+export const handler = adaptHandler(routeHandler);

@@ -2,7 +2,7 @@ import { adaptHandler } from '../_lib/netlifyAdapter.js';
 import { supabaseAdmin } from '../_lib/supabaseAdmin.js';
 import { webPush } from '../_lib/webPush.js';
 
-async function handler(req: any, res: any) {
+async function routeHandler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -91,4 +91,4 @@ async function handler(req: any, res: any) {
   return res.status(200).json({ sent, failed, total: dueSchedules.length });
 }
 
-export const handler = adaptHandler(handler);
+export const handler = adaptHandler(routeHandler);
