@@ -7,8 +7,8 @@
 
 # API 路由映射
 [[redirects]]
-  from = "/api/auth/sync"
-  to = "/.netlify/functions/auth-sync"
+  from = "/api/auth/*"
+  to = "/.netlify/functions/auth-:splat"
   status = 200
 
 [[redirects]]
@@ -22,18 +22,8 @@
   status = 200
 
 [[redirects]]
-  from = "/api/push/subscribe"
-  to = "/.netlify/functions/push-subscribe"
-  status = 200
-
-[[redirects]]
-  from = "/api/push/trigger-mood"
-  to = "/.netlify/functions/push-trigger-mood"
-  status = 200
-
-[[redirects]]
-  from = "/api/push/trigger-schedule"
-  to = "/.netlify/functions/push-trigger-schedule"
+  from = "/api/push/*"
+  to = "/.netlify/functions/push-:splat"
   status = 200
 
 # SPA fallback
