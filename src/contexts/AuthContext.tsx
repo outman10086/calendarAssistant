@@ -4,6 +4,14 @@ import type { User } from '../types';
 
 const CODE_KEY = isMockMode ? 'mock_sync_code' : 'sync_code';
 const USER_ID_KEY = isMockMode ? 'mock_user_id' : 'user_id';
+const SYNC_HISTORY_KEY = 'sync_history';
+
+export interface SyncHistoryItem {
+  code: string;
+  description: string;
+  created_at: string;
+  user_id: string;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -15,15 +23,30 @@ interface AuthContextType {
   syncToCloud: (code?: string) => Promise<boolean>;
   syncFromCloud: (code: string) => Promise<boolean>;
   lastSyncAt: string | null;
+  syncHistory: SyncHistoryItem[];
+  addSyncHistory: (item: Omit<SyncHistoryItem, 'created_at'>) => void;
+  updateSyncHistoryDesc: (code: string, description: string) => void;
+  removeSyncHistory: (code: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+
+function getSyncHistory(): SyncHistoryItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(SYNC_HISTORY_KEY) || '[]');
+  } catch { return []; }
+}
+
+function saveSyncHistory(list: SyncHistoryItem[]) {
+  localStorage.setItem(SYNC_HISTORY_KEY, JSON.stringify(list));
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [syncCode, setSyncCode] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [syncHistory, setSyncHistory] = useState<SyncHistoryItem[]>(getSyncHistory);
 
   useEffect(() => {
     const storedCode = localStorage.getItem(CODE_KEY);
@@ -89,12 +112,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSyncCode('');
   }, []);
 
+  const addSyncHistory = useCallback((item: Omit<SyncHistoryItem, 'created_at'>) => {
+    const list = getSyncHistory();
+    // 去重：如果已存在则更新，否则添加
+    const idx = list.findIndex((h) => h.code === item.code);
+    const newItem: SyncHistoryItem = { ...item, created_at: new Date().toISOString() };
+    if (idx >= 0) {
+      list[idx] = newItem;
+    } else {
+      list.unshift(newItem);
+    }
+    saveSyncHistory(list);
+    setSyncHistory(list);
+  }, []);
+
+  const updateSyncHistoryDesc = useCallback((code: string, description: string) => {
+    const list = getSyncHistory();
+    const idx = list.findIndex((h) => h.code === code);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], description };
+      saveSyncHistory(list);
+      setSyncHistory(list);
+    }
+  }, []);
+
+  const removeSyncHistory = useCallback((code: string) => {
+    const list = getSyncHistory().filter((h) => h.code !== code);
+    saveSyncHistory(list);
+    setSyncHistory(list);
+  }, []);
+
   /** 将本地数据推送到云端 */
   const syncToCloud = useCallback(async (code?: string) => {
     const targetCode = code || syncCode;
     const userId = localStorage.getItem(USER_ID_KEY);
     if (!targetCode || !userId) {
-      // 没有同步码：先创建用户，再推送
       if (!targetCode) {
         const res = await createUser();
         if (!res) return false;
@@ -127,7 +179,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /** 从云端拉取数据到本地（覆盖） */
   const syncFromCloud = useCallback(async (code: string) => {
     try {
-      // 先验证同步码
       const res = await apiFetch('/api/auth/sync', {
         method: 'POST',
         body: JSON.stringify({ sync_code: code }),
@@ -137,13 +188,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(res.user);
       setSyncCode(res.sync_code);
 
-      // 拉取数据
       const data = await apiFetch('/api/sync/pull', {
         method: 'POST',
         body: JSON.stringify({ user_id: res.user.id }),
       });
 
-      // 覆盖本地数据
       if (data.schedules) localStorage.setItem('local_schedules', JSON.stringify(data.schedules));
       if (data.moodEntries) localStorage.setItem('local_mood_entries', JSON.stringify(data.moodEntries));
 
@@ -157,7 +206,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, syncCode, loading, createUser, loginWithCode, logout, syncToCloud, syncFromCloud, lastSyncAt }}>
+    <AuthContext.Provider value={{
+      user, syncCode, loading, createUser, loginWithCode, logout,
+      syncToCloud, syncFromCloud, lastSyncAt,
+      syncHistory, addSyncHistory, updateSyncHistoryDesc, removeSyncHistory,
+    }}>
       {children}
     </AuthContext.Provider>
   );
