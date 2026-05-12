@@ -98,7 +98,28 @@ function handleMockRequest(path: string, options: RequestInit): any {
         }
         throw new Error('Invalid sync code');
       }
-      // 创建新用户
+      // 创建新用户（支持自定义同步码）
+      const customCode = body.custom_code?.trim().toLowerCase();
+      if (customCode) {
+        if (customCode.length < 4 || customCode.length > 20) {
+          throw new Error('同步码长度需在 4-20 位之间');
+        }
+        if (mockCloud.codeIndex[customCode]) {
+          throw new Error('该同步码已被占用，请换一个');
+        }
+        const userId = generateId();
+        const user: CloudUser = {
+          id: userId,
+          sync_code: customCode,
+          created_at: new Date().toISOString(),
+          schedules: [],
+          moodEntries: [],
+        };
+        mockCloud.users[userId] = user;
+        mockCloud.codeIndex[customCode] = userId;
+        return { user: { id: userId, sync_code: customCode, created_at: user.created_at }, sync_code: customCode };
+      }
+      // 系统随机生成
       const code = generateMockCode();
       const userId = generateId();
       const user: CloudUser = {

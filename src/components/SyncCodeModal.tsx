@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   KeyRound, UserPlus, ArrowRight, Copy, Check, Upload, Download,
-  X, Clock, Pencil, Trash2, History, ChevronRight,
+  X, Clock, Pencil, Trash2, History, ChevronRight, Sparkles, Edit3,
 } from 'lucide-react';
 
 interface SyncCodeModalProps {
@@ -10,7 +10,7 @@ interface SyncCodeModalProps {
   onClose: () => void;
 }
 
-type Mode = 'menu' | 'new-desc' | 'upload' | 'download' | 'success';
+type Mode = 'menu' | 'custom-code' | 'auto-code' | 'upload' | 'download' | 'success';
 
 export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
   const {
@@ -20,6 +20,7 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
 
   const [mode, setMode] = useState<Mode>('menu');
   const [inputCode, setInputCode] = useState('');
+  const [customCode, setCustomCode] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
@@ -33,6 +34,7 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
   const reset = () => {
     setMode('menu');
     setInputCode('');
+    setCustomCode('');
     setDescription('');
     setError('');
     setSyncResult('');
@@ -45,28 +47,80 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
     onClose();
   };
 
-  // 第一步：生成同步码
-  const handleCreateCode = async () => {
+  // 系统随机生成同步码
+  const handleAutoCreate = async () => {
     setError('');
     const res = await createUser();
     if (res) {
       setNewCode(res.sync_code);
-      setMode('new-desc');
+      setMode('auto-code');
+      // 创建成功后立即加入历史记录
+      addSyncHistory({
+        code: res.sync_code,
+        description: '系统生成',
+        user_id: res.user.id,
+      });
     } else {
       setError('生成同步码失败');
     }
   };
 
-  // 第二步：填写描述并上传
-  const handleConfirmNew = async () => {
+  // 用户自定义同步码
+  const handleCustomCreate = async () => {
+    setError('');
+    const code = customCode.trim().toLowerCase();
+    if (!code) {
+      setError('请输入同步码');
+      return;
+    }
+    if (code.length < 4 || code.length > 20) {
+      setError('同步码长度需在 4-20 位之间');
+      return;
+    }
+    try {
+      const res = await createUser(code);
+      if (res) {
+        setNewCode(res.sync_code);
+        setMode('custom-code');
+        // 创建成功后立即加入历史记录
+        addSyncHistory({
+          code: res.sync_code,
+          description: description.trim() || '自定义码',
+          user_id: res.user.id,
+        });
+      }
+    } catch (e: any) {
+      setError(e.message || '创建失败');
+    }
+  };
+
+  // 确认上传（系统生成码）
+  const handleConfirmAuto = async () => {
     setError('');
     const ok = await syncToCloud(newCode);
     if (ok) {
-      addSyncHistory({
-        code: newCode,
-        description: description.trim() || '未命名',
-        user_id: localStorage.getItem('mock_user_id') || localStorage.getItem('user_id') || '',
-      });
+      // 如果用户输入了描述，更新历史记录中的描述
+      const desc = description.trim();
+      if (desc) {
+        updateSyncHistoryDesc(newCode, desc);
+      }
+      setSyncResult('本地数据已成功上传到云端');
+      setMode('success');
+    } else {
+      setError('数据上传失败');
+    }
+  };
+
+  // 确认上传（自定义码）
+  const handleConfirmCustom = async () => {
+    setError('');
+    const ok = await syncToCloud(newCode);
+    if (ok) {
+      // 如果用户修改了描述，更新历史记录
+      const desc = description.trim();
+      if (desc) {
+        updateSyncHistoryDesc(newCode, desc);
+      }
       setSyncResult('本地数据已成功上传到云端');
       setMode('success');
     } else {
@@ -76,8 +130,8 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
 
   // 上传到已有账户
   const handleUpload = async () => {
-    if (!inputCode.trim() || inputCode.length !== 8) {
-      setError('请输入8位同步码');
+    if (!inputCode.trim() || inputCode.length < 4) {
+      setError('请输入有效的同步码（至少4位）');
       return;
     }
     setError('');
@@ -88,7 +142,6 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
     }
     const uploaded = await syncToCloud(inputCode.trim().toLowerCase());
     if (uploaded) {
-      // 如果这个码在历史中，更新描述为"手动上传"
       const existing = syncHistory.find((h) => h.code === inputCode.trim().toLowerCase());
       if (!existing) {
         addSyncHistory({
@@ -106,8 +159,8 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
 
   // 从云端下载
   const handleDownload = async () => {
-    if (!inputCode.trim() || inputCode.length !== 8) {
-      setError('请输入8位同步码');
+    if (!inputCode.trim() || inputCode.length < 4) {
+      setError('请输入有效的同步码（至少4位）');
       return;
     }
     setError('');
@@ -176,17 +229,32 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
         {/* 主菜单 */}
         {mode === 'menu' && (
           <div className="space-y-3">
+            {/* 自定义同步码 */}
             <button
-              onClick={() => setMode('new-desc')}
-              disabled={!newCode}
-              className="w-full flex items-center gap-3 p-4 bg-cream-50 rounded-2xl border border-cream-200 hover:bg-cream-100 hover:shadow-sm transition-all text-left disabled:opacity-50"
+              onClick={() => setMode('custom-code')}
+              className="w-full flex items-center gap-3 p-4 bg-cream-50 rounded-2xl border border-cream-200 hover:bg-cream-100 hover:shadow-sm transition-all text-left"
             >
               <div className="w-10 h-10 bg-cream-900 rounded-xl flex items-center justify-center shrink-0">
-                <UserPlus className="text-white" size={20} />
+                <Edit3 className="text-white" size={20} />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-cream-900">生成新同步码</div>
-                <div className="text-xs text-cream-500">创建新账户并将本地数据上传</div>
+                <div className="font-medium text-cream-900">自定义同步码</div>
+                <div className="text-xs text-cream-500">输入自己想要的同步码并上传</div>
+              </div>
+              <ChevronRight size={16} className="text-cream-400 shrink-0" />
+            </button>
+
+            {/* 系统随机生成 */}
+            <button
+              onClick={() => setMode('auto-code')}
+              className="w-full flex items-center gap-3 p-4 bg-cream-50 rounded-2xl border border-cream-200 hover:bg-cream-100 hover:shadow-sm transition-all text-left"
+            >
+              <div className="w-10 h-10 bg-cream-700 rounded-xl flex items-center justify-center shrink-0">
+                <Sparkles className="text-white" size={20} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-cream-900">系统随机生成</div>
+                <div className="text-xs text-cream-500">自动生成随机同步码并上传</div>
               </div>
               <ChevronRight size={16} className="text-cream-400 shrink-0" />
             </button>
@@ -195,7 +263,7 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
               onClick={() => setMode('upload')}
               className="w-full flex items-center gap-3 p-4 bg-cream-50 rounded-2xl border border-cream-200 hover:bg-cream-100 hover:shadow-sm transition-all text-left"
             >
-              <div className="w-10 h-10 bg-cream-700 rounded-xl flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 bg-cream-600 rounded-xl flex items-center justify-center shrink-0">
                 <Upload className="text-white" size={20} />
               </div>
               <div className="flex-1 min-w-0">
@@ -209,7 +277,7 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
               onClick={() => setMode('download')}
               className="w-full flex items-center gap-3 p-4 bg-cream-50 rounded-2xl border border-cream-200 hover:bg-cream-100 hover:shadow-sm transition-all text-left"
             >
-              <div className="w-10 h-10 bg-cream-700 rounded-xl flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 bg-cream-600 rounded-xl flex items-center justify-center shrink-0">
                 <Download className="text-white" size={20} />
               </div>
               <div className="flex-1 min-w-0">
@@ -219,35 +287,51 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
               <ChevronRight size={16} className="text-cream-400 shrink-0" />
             </button>
 
-            {/* 当前同步码 */}
-            {syncCode && (
-              <div className="mt-4 pt-4 border-t border-cream-100">
-                <div className="text-xs text-cream-500 mb-2">当前同步码</div>
+            {/* 当前同步码 — 始终显示 */}
+            <div className="mt-4 pt-4 border-t border-cream-100">
+              <div className="text-xs font-medium text-cream-500 mb-2">当前同步码</div>
+              {syncCode ? (
                 <div className="flex items-center justify-between bg-cream-50 rounded-xl px-4 py-3 border border-cream-200">
                   <span className="font-mono font-bold text-cream-900 tracking-wider">{syncCode}</span>
                   <button onClick={handleCopy} className="p-1.5 hover:bg-cream-200 rounded-lg transition-colors">
                     {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} className="text-cream-500" />}
                   </button>
                 </div>
-              </div>
-            )}
-
-            {/* 历史同步码 */}
-            {syncHistory.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-cream-100">
-                <div className="flex items-center gap-1.5 text-xs text-cream-500 mb-3">
-                  <History size={14} />
-                  历史同步码 ({syncHistory.length})
+              ) : (
+                <div className="flex items-center justify-between bg-cream-50 rounded-xl px-4 py-3 border border-dashed border-cream-300">
+                  <span className="text-sm text-cream-400">未设置同步码</span>
+                  <span className="text-xs text-cream-400">数据仅保存在本地</span>
                 </div>
+              )}
+            </div>
+
+            {/* 历史同步码 — 始终显示 */}
+            <div className="mt-4 pt-4 border-t border-cream-100">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-cream-500 mb-3">
+                <History size={14} />
+                历史同步码 ({syncHistory.length})
+              </div>
+
+              {syncHistory.length === 0 ? (
+                <div className="text-center py-6 bg-cream-50 rounded-xl border border-dashed border-cream-200">
+                  <p className="text-sm text-cream-400">暂无历史记录</p>
+                  <p className="text-xs text-cream-400 mt-1">创建同步码后会自动记录在这里</p>
+                </div>
+              ) : (
                 <div className="space-y-2">
                   {syncHistory.map((item) => (
                     <div
                       key={item.code}
-                      className="bg-cream-50 rounded-xl border border-cream-200 p-3 group hover:border-cream-300 transition-colors"
+                      className={`bg-cream-50 rounded-xl border p-3 group hover:border-cream-300 transition-colors ${
+                        item.code === syncCode ? 'border-cream-900' : 'border-cream-200'
+                      }`}
                     >
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
                           <span className="font-mono font-bold text-cream-900 text-sm tracking-wider">{item.code}</span>
+                          {item.code === syncCode && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-cream-900 text-white rounded-full font-medium">当前</span>
+                          )}
                           <button
                             onClick={() => {
                               navigator.clipboard.writeText(item.code);
@@ -325,32 +409,38 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 
-        {/* 生成新同步码 — 填写描述 */}
-        {mode === 'new-desc' && (
+        {/* 自定义同步码 */}
+        {mode === 'custom-code' && !newCode && (
           <div className="space-y-4">
-            <div className="text-center space-y-2">
-              <div className="text-xs text-cream-500">新同步码已生成</div>
-              <div className="bg-cream-50 rounded-xl px-4 py-3 border border-cream-200">
-                <div className="text-2xl font-bold text-cream-900 tracking-[0.15em] font-mono">{newCode}</div>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-cream-700 mb-1.5">输入你想要的同步码</label>
+              <input
+                type="text"
+                value={customCode}
+                onChange={(e) => setCustomCode(e.target.value)}
+                placeholder="4-20位字母或数字，例如：mycode2024"
+                maxLength={20}
+                className="w-full px-4 py-3 border border-cream-200 rounded-2xl text-center tracking-wider text-lg focus:outline-none focus:ring-2 focus:ring-cream-900 focus:border-cream-900 bg-cream-50 transition-all"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCustomCreate();
+                }}
+              />
+              <p className="text-xs text-cream-400 mt-1.5">同步码将是你的唯一凭证，请牢记</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-cream-700 mb-1.5">描述（用于标识这个同步码）</label>
+              <label className="block text-sm font-medium text-cream-700 mb-1.5">描述（可选）</label>
               <input
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="例如：工作电脑、个人手机..."
                 className="w-full px-4 py-3 border border-cream-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-cream-900 focus:border-cream-900 bg-cream-50 text-sm placeholder:text-cream-400 transition-all"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleConfirmNew();
-                }}
               />
             </div>
 
@@ -361,13 +451,110 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
                 取消
               </button>
               <button
-                onClick={handleConfirmNew}
+                onClick={handleCustomCreate}
+                disabled={loading || !customCode.trim()}
+                className="flex-1 py-3 bg-cream-900 text-white rounded-2xl font-medium hover:bg-cream-800 hover:shadow-md active:scale-[0.98] disabled:opacity-50 transition-all shadow-sm"
+              >
+                {loading ? '创建中...' : '创建并上传'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 自定义同步码 — 确认上传 */}
+        {mode === 'custom-code' && newCode && (
+          <div className="space-y-4">
+            <div className="text-center space-y-2">
+              <div className="text-xs text-cream-500">自定义同步码已创建</div>
+              <div className="bg-cream-50 rounded-xl px-4 py-3 border border-cream-200">
+                <div className="text-2xl font-bold text-cream-900 tracking-[0.15em] font-mono">{newCode}</div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-cream-700 mb-1.5">描述</label>
+              <input
+                type="text"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="例如：工作电脑、个人手机..."
+                className="w-full px-4 py-3 border border-cream-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-cream-900 focus:border-cream-900 bg-cream-50 text-sm placeholder:text-cream-400 transition-all"
+              />
+            </div>
+
+            {error && <p className="text-sm text-red-500">{error}</p>}
+
+            <div className="flex gap-2">
+              <button onClick={reset} className="flex-1 py-3 border border-cream-200 text-cream-700 rounded-2xl font-medium hover:bg-cream-100 transition-all">
+                取消
+              </button>
+              <button
+                onClick={handleConfirmCustom}
                 disabled={loading}
                 className="flex-1 py-3 bg-cream-900 text-white rounded-2xl font-medium hover:bg-cream-800 hover:shadow-md active:scale-[0.98] disabled:opacity-50 transition-all shadow-sm"
               >
                 {loading ? '上传中...' : '确认并上传'}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* 系统随机生成 — 确认上传 */}
+        {mode === 'auto-code' && (
+          <div className="space-y-4">
+            {!newCode ? (
+              <>
+                <p className="text-sm text-cream-600">系统将生成一个随机同步码，并把当前本地所有数据上传到云端。</p>
+                {error && <p className="text-sm text-red-500">{error}</p>}
+                <div className="flex gap-2">
+                  <button onClick={reset} className="flex-1 py-3 border border-cream-200 text-cream-700 rounded-2xl font-medium hover:bg-cream-100 transition-all">
+                    取消
+                  </button>
+                  <button
+                    onClick={handleAutoCreate}
+                    disabled={loading}
+                    className="flex-1 py-3 bg-cream-900 text-white rounded-2xl font-medium hover:bg-cream-800 hover:shadow-md active:scale-[0.98] disabled:opacity-50 transition-all shadow-sm"
+                  >
+                    {loading ? '生成中...' : '确认生成'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-center space-y-2">
+                  <div className="text-xs text-cream-500">系统已生成同步码</div>
+                  <div className="bg-cream-50 rounded-xl px-4 py-3 border border-cream-200">
+                    <div className="text-2xl font-bold text-cream-900 tracking-[0.15em] font-mono">{newCode}</div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-cream-700 mb-1.5">描述（可选）</label>
+                  <input
+                    type="text"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="例如：工作电脑、个人手机..."
+                    className="w-full px-4 py-3 border border-cream-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-cream-900 focus:border-cream-900 bg-cream-50 text-sm placeholder:text-cream-400 transition-all"
+                  />
+                </div>
+
+                {error && <p className="text-sm text-red-500">{error}</p>}
+
+                <div className="flex gap-2">
+                  <button onClick={reset} className="flex-1 py-3 border border-cream-200 text-cream-700 rounded-2xl font-medium hover:bg-cream-100 transition-all">
+                    取消
+                  </button>
+                  <button
+                    onClick={handleConfirmAuto}
+                    disabled={loading}
+                    className="flex-1 py-3 bg-cream-900 text-white rounded-2xl font-medium hover:bg-cream-800 hover:shadow-md active:scale-[0.98] disabled:opacity-50 transition-all shadow-sm"
+                  >
+                    {loading ? '上传中...' : '确认并上传'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -383,9 +570,8 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
               type="text"
               value={inputCode}
               onChange={(e) => setInputCode(e.target.value)}
-              placeholder="输入8位同步码"
-              maxLength={8}
-              className="w-full px-4 py-3.5 border border-cream-200 rounded-2xl text-center tracking-[0.3em] text-lg uppercase focus:outline-none focus:ring-2 focus:ring-cream-900 focus:border-cream-900 bg-cream-50 transition-all"
+              placeholder="输入同步码"
+              className="w-full px-4 py-3.5 border border-cream-200 rounded-2xl text-center tracking-wider text-lg focus:outline-none focus:ring-2 focus:ring-cream-900 focus:border-cream-900 bg-cream-50 transition-all"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   mode === 'upload' ? handleUpload() : handleDownload();
@@ -399,7 +585,7 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
               </button>
               <button
                 onClick={mode === 'upload' ? handleUpload : handleDownload}
-                disabled={loading || inputCode.length !== 8}
+                disabled={loading || !inputCode.trim()}
                 className="flex-1 py-3 bg-cream-900 text-white rounded-2xl font-medium hover:bg-cream-800 hover:shadow-md active:scale-[0.98] disabled:opacity-50 transition-all shadow-sm"
               >
                 {loading ? '处理中...' : mode === 'upload' ? '确认上传' : '确认下载'}
@@ -417,7 +603,7 @@ export function SyncCodeModal({ isOpen, onClose }: SyncCodeModalProps) {
 
             {newCode && (
               <div className="space-y-2">
-                <div className="text-xs text-cream-500">你的新同步码</div>
+                <div className="text-xs text-cream-500">你的同步码</div>
                 <div className="bg-cream-50 rounded-xl px-4 py-3 border border-cream-200">
                   <div className="text-2xl font-bold text-cream-900 tracking-[0.15em] font-mono">{newCode}</div>
                 </div>

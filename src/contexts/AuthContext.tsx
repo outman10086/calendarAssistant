@@ -17,7 +17,7 @@ interface AuthContextType {
   user: User | null;
   syncCode: string;
   loading: boolean;
-  createUser: () => Promise<{ user: User; sync_code: string } | undefined>;
+  createUser: (customCode?: string) => Promise<{ user: User; sync_code: string } | undefined>;
   loginWithCode: (code: string) => Promise<boolean>;
   logout: () => void;
   syncToCloud: (code?: string) => Promise<boolean>;
@@ -62,6 +62,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .then((res) => {
           setUser(res.user);
           setSyncCode(res.sync_code);
+          // 自动将当前同步码加入历史记录（如果尚未记录）
+          setSyncHistory(prev => {
+            if (prev.some(h => h.code === res.sync_code)) return prev;
+            const updated = [{
+              code: res.sync_code,
+              description: '',
+              created_at: new Date().toISOString(),
+            }, ...prev];
+            saveSyncHistory(updated);
+            return updated;
+          });
         })
         .catch(() => {
           localStorage.removeItem(CODE_KEY);
@@ -73,10 +84,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const createUser = useCallback(async () => {
+  const createUser = useCallback(async (customCode?: string) => {
     setLoading(true);
     try {
-      const res = await apiFetch('/api/auth/sync', { method: 'POST' });
+      const res = await apiFetch('/api/auth/sync', {
+        method: 'POST',
+        body: JSON.stringify(customCode ? { custom_code: customCode } : {}),
+      });
       localStorage.setItem(CODE_KEY, res.sync_code);
       localStorage.setItem(USER_ID_KEY, res.user.id);
       setSyncCode(res.sync_code);
