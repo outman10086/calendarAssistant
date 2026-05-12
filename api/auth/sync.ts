@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { adaptHandler } from '../_lib/netlifyAdapter.js';
 import { supabaseAdmin } from '../_lib/supabaseAdmin.js';
 
 function generateSyncCode(): string {
@@ -10,7 +10,7 @@ function generateSyncCode(): string {
   return code;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -58,3 +58,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   return res.status(200).json({ user, sync_code: code });
 }
+
+export const handler = adaptHandler(handler);

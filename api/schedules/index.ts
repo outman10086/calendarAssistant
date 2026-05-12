@@ -1,7 +1,7 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { adaptHandler } from '../_lib/netlifyAdapter.js';
 import { supabaseAdmin } from '../_lib/supabaseAdmin.js';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: any, res: any) {
   const userId = req.headers['x-user-id'] as string;
   if (!userId) {
     return res.status(401).json({ error: 'Missing user id' });
@@ -66,3 +66,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   return res.status(405).json({ error: 'Method not allowed' });
 }
+
+export const handler = adaptHandler(handler);

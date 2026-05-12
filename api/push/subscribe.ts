@@ -1,7 +1,7 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { adaptHandler } from '../_lib/netlifyAdapter.js';
 import { supabaseAdmin } from '../_lib/supabaseAdmin.js';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -35,3 +35,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (error) return res.status(500).json({ error: error.message });
   return res.status(200).json({ subscription: data });
 }
+
+export const handler = adaptHandler(handler);

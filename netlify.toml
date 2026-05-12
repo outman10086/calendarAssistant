@@ -1,0 +1,51 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[functions]
+  directory = "api"
+
+# API 路由映射
+[[redirects]]
+  from = "/api/auth/sync"
+  to = "/.netlify/functions/auth-sync"
+  status = 200
+
+[[redirects]]
+  from = "/api/schedules"
+  to = "/.netlify/functions/schedules"
+  status = 200
+
+[[redirects]]
+  from = "/api/mood"
+  to = "/.netlify/functions/mood"
+  status = 200
+
+[[redirects]]
+  from = "/api/push/subscribe"
+  to = "/.netlify/functions/push-subscribe"
+  status = 200
+
+[[redirects]]
+  from = "/api/push/trigger-mood"
+  to = "/.netlify/functions/push-trigger-mood"
+  status = 200
+
+[[redirects]]
+  from = "/api/push/trigger-schedule"
+  to = "/.netlify/functions/push-trigger-schedule"
+  status = 200
+
+# SPA fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# CORS headers
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, x-user-id, x-cron-secret"
