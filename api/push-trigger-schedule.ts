@@ -1,6 +1,6 @@
-import { adaptHandler } from './lib/netlifyAdapter.js';
-import { supabaseAdmin } from './lib/supabaseAdmin.js';
-import { webPush } from './lib/webPush.js';
+import { adaptHandler } from './lib/netlifyAdapter';
+import { supabaseAdmin } from './lib/supabaseAdmin';
+import { webPush } from './lib/webPush';
 
 async function routeHandler(req: any, res: any) {
   if (req.method !== 'POST') {

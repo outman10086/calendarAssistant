@@ -1,5 +1,5 @@
-import { adaptHandler } from './lib/netlifyAdapter.js';
-import { supabaseAdmin } from './lib/supabaseAdmin.js';
+import { adaptHandler } from './lib/netlifyAdapter';
+import { supabaseAdmin } from './lib/supabaseAdmin';
 
 function generateSyncCode(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';

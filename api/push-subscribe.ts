@@ -1,5 +1,5 @@
-import { adaptHandler } from './lib/netlifyAdapter.js';
-import { supabaseAdmin } from './lib/supabaseAdmin.js';
+import { adaptHandler } from './lib/netlifyAdapter';
+import { supabaseAdmin } from './lib/supabaseAdmin';
 
 async function routeHandler(req: any, res: any) {
   if (req.method !== 'POST') {
