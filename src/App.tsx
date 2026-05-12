@@ -4,21 +4,16 @@ import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
 import { Schedules } from './pages/Schedules';
 import { Mood } from './pages/Mood';
-import { SyncCodeModal } from './components/SyncCodeModal';
 
 function AppRoutes() {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+      <div className="flex items-center justify-center min-h-screen bg-cream-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cream-900"></div>
       </div>
     );
-  }
-
-  if (!user) {
-    return <SyncCodeModal />;
   }
 
   return (

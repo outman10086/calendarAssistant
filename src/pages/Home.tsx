@@ -26,7 +26,7 @@ export function Home() {
       <div className="grid grid-cols-2 gap-4">
         <Link
           to="/schedules"
-          className="bg-white rounded-2xl p-5 shadow-sm border border-cream-200 hover:shadow-md hover:border-cream-300 transition-all flex flex-col items-center gap-3 text-center group"
+          className="bg-white rounded-2xl p-5 shadow-sm border border-cream-200 hover:shadow-lg hover:-translate-y-0.5 transition-all flex flex-col items-center gap-3 text-center group"
         >
           <div className="w-12 h-12 bg-cream-100 rounded-2xl flex items-center justify-center group-hover:bg-cream-200 transition-colors">
             <Calendar className="text-cream-900" size={24} />
@@ -39,7 +39,7 @@ export function Home() {
 
         <Link
           to="/mood"
-          className="bg-white rounded-2xl p-5 shadow-sm border border-cream-200 hover:shadow-md hover:border-cream-300 transition-all flex flex-col items-center gap-3 text-center group"
+          className="bg-white rounded-2xl p-5 shadow-sm border border-cream-200 hover:shadow-lg hover:-translate-y-0.5 transition-all flex flex-col items-center gap-3 text-center group"
         >
           <div className="w-12 h-12 bg-cream-100 rounded-2xl flex items-center justify-center group-hover:bg-cream-200 transition-colors">
             <Smile className="text-cream-900" size={24} />

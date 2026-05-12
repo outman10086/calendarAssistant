@@ -14,17 +14,51 @@ export const API_BASE = import.meta.env.VITE_API_BASE || '';
 // 本地预览模式标志
 export const isMockMode = !supabaseUrl || !supabaseAnonKey;
 
-// Mock 数据存储（本地预览用）
-const mockStorage: Record<string, any> = {
-  user: null,
-  schedules: [],
-  moodEntries: [],
+// ========== 本地优先数据存储 ==========
+const LS_SCHEDULES = 'local_schedules';
+const LS_MOOD = 'local_mood_entries';
+
+function getLocalSchedules(): any[] {
+  try {
+    return JSON.parse(localStorage.getItem(LS_SCHEDULES) || '[]');
+  } catch { return []; }
+}
+
+function setLocalSchedules(data: any[]) {
+  localStorage.setItem(LS_SCHEDULES, JSON.stringify(data));
+}
+
+function getLocalMood(): any[] {
+  try {
+    return JSON.parse(localStorage.getItem(LS_MOOD) || '[]');
+  } catch { return []; }
+}
+
+function setLocalMood(data: any[]) {
+  localStorage.setItem(LS_MOOD, JSON.stringify(data));
+}
+
+// ========== Mock 云端数据存储（多用户） ==========
+interface CloudUser {
+  id: string;
+  sync_code: string;
+  created_at: string;
+  schedules: any[];
+  moodEntries: any[];
+}
+
+const mockCloud: {
+  users: Record<string, CloudUser>;
+  codeIndex: Record<string, string>; // sync_code -> user_id
+} = {
+  users: {},
+  codeIndex: {},
 };
 
 export async function apiFetch(path: string, options: RequestInit = {}) {
   // 本地预览模式：返回模拟数据
   if (isMockMode) {
-    await new Promise((r) => setTimeout(r, 200)); // 模拟网络延迟
+    await new Promise((r) => setTimeout(r, 200));
     return handleMockRequest(path, options);
   }
 
@@ -52,66 +86,98 @@ function handleMockRequest(path: string, options: RequestInit): any {
   const method = options.method || 'GET';
   const body = options.body ? JSON.parse(options.body as string) : {};
 
+  // ========== 认证 ==========
   if (path === '/api/auth/sync') {
     if (method === 'POST') {
       if (body.sync_code) {
-        // 登录
-        if (mockStorage.user && mockStorage.user.sync_code === body.sync_code) {
-          return { user: mockStorage.user, sync_code: body.sync_code };
+        // 验证同步码
+        const userId = mockCloud.codeIndex[body.sync_code];
+        if (userId && mockCloud.users[userId]) {
+          const u = mockCloud.users[userId];
+          return { user: { id: u.id, sync_code: u.sync_code, created_at: u.created_at }, sync_code: u.sync_code };
         }
         throw new Error('Invalid sync code');
       }
-      // 创建用户
+      // 创建新用户
       const code = generateMockCode();
-      const user = { id: generateId(), sync_code: code, created_at: new Date().toISOString() };
-      mockStorage.user = user;
-      localStorage.setItem('mock_user_id', user.id);
-      localStorage.setItem('mock_sync_code', code);
-      return { user, sync_code: code };
+      const userId = generateId();
+      const user: CloudUser = {
+        id: userId,
+        sync_code: code,
+        created_at: new Date().toISOString(),
+        schedules: [],
+        moodEntries: [],
+      };
+      mockCloud.users[userId] = user;
+      mockCloud.codeIndex[code] = userId;
+      return { user: { id: userId, sync_code: code, created_at: user.created_at }, sync_code: code };
     }
   }
 
+  // ========== 云端同步：推送（本地 → 云端） ==========
+  if (path === '/api/sync/push') {
+    if (method === 'POST') {
+      const userId = body.user_id;
+      if (!userId || !mockCloud.users[userId]) throw new Error('User not found');
+      mockCloud.users[userId].schedules = body.schedules || [];
+      mockCloud.users[userId].moodEntries = body.moodEntries || [];
+      return { success: true, count: { schedules: body.schedules?.length || 0, mood: body.moodEntries?.length || 0 } };
+    }
+  }
+
+  // ========== 云端同步：拉取（云端 → 本地） ==========
+  if (path === '/api/sync/pull') {
+    if (method === 'POST') {
+      const userId = body.user_id;
+      if (!userId || !mockCloud.users[userId]) throw new Error('User not found');
+      const u = mockCloud.users[userId];
+      return { schedules: u.schedules, moodEntries: u.moodEntries };
+    }
+  }
+
+  // ========== 日程（本地优先） ==========
   if (path.startsWith('/api/schedules')) {
     if (method === 'GET') {
-      // 返回新数组引用，确保 React 检测到变化
-      return { schedules: [...mockStorage.schedules] };
+      return { schedules: [...getLocalSchedules()] };
     }
     if (method === 'POST') {
       const schedule = { id: generateId(), ...body, created_at: new Date().toISOString() };
-      mockStorage.schedules = [...mockStorage.schedules, schedule];
+      const list = [...getLocalSchedules(), schedule];
+      setLocalSchedules(list);
       return { schedule };
     }
     if (method === 'PUT') {
       const { id, ...updates } = body || {};
       if (!id) throw new Error('Missing id');
-      const idx = mockStorage.schedules.findIndex((s: any) => s.id === id);
+      const list = getLocalSchedules();
+      const idx = list.findIndex((s: any) => s.id === id);
       if (idx >= 0) {
-        mockStorage.schedules = mockStorage.schedules.map((s: any) =>
-          s.id === id ? { ...s, ...updates } : s
-        );
-        const updated = mockStorage.schedules.find((s: any) => s.id === id);
-        return { schedule: updated };
+        const updated = list.map((s: any) => s.id === id ? { ...s, ...updates } : s);
+        setLocalSchedules(updated);
+        return { schedule: updated.find((s: any) => s.id === id) };
       }
       throw new Error('Schedule not found');
     }
     if (method === 'DELETE') {
       const id = new URLSearchParams(path.split('?')[1]).get('id');
       if (!id) throw new Error('Missing id');
-      mockStorage.schedules = mockStorage.schedules.filter((s: any) => s.id !== id);
+      const list = getLocalSchedules().filter((s: any) => s.id !== id);
+      setLocalSchedules(list);
       return {};
     }
   }
 
+  // ========== 心情（本地优先） ==========
   if (path.startsWith('/api/mood')) {
     if (method === 'GET') {
-      return { entries: [...mockStorage.moodEntries] };
+      return { entries: [...getLocalMood()] };
     }
     if (method === 'POST') {
-      const existing = mockStorage.moodEntries.find((e: any) => e.date === body.date);
+      const list = getLocalMood();
+      const existing = list.find((e: any) => e.date === body.date);
       const newEvents = Array.isArray(body.events) ? body.events : [];
 
       if (existing) {
-        // 同一天已有记录：合并事件，其他字段有值才更新
         const merged = {
           ...existing,
           events: [...(existing.events || []), ...newEvents],
@@ -119,29 +185,28 @@ function handleMockRequest(path: string, options: RequestInit): any {
           note: body.note !== undefined ? body.note : existing.note,
           created_at: new Date().toISOString(),
         };
-        mockStorage.moodEntries = mockStorage.moodEntries.map((e: any) =>
-          e.date === body.date ? merged : e
-        );
+        const updated = list.map((e: any) => e.date === body.date ? merged : e);
+        setLocalMood(updated);
         return { entry: merged };
       }
 
-      // 新记录
       const entry = {
         id: generateId(),
-        user_id: mockStorage.user?.id || 'mock',
+        user_id: 'local',
         date: body.date,
         mood_score: body.mood_score || 0,
         events: newEvents,
         note: body.note || '',
         created_at: new Date().toISOString(),
       };
-      mockStorage.moodEntries = [...mockStorage.moodEntries, entry];
+      setLocalMood([...list, entry]);
       return { entry };
     }
     if (method === 'DELETE') {
       const id = new URLSearchParams(path.split('?')[1]).get('id');
       if (!id) throw new Error('Missing id');
-      mockStorage.moodEntries = mockStorage.moodEntries.filter((e: any) => e.id !== id);
+      const list = getLocalMood().filter((e: any) => e.id !== id);
+      setLocalMood(list);
       return {};
     }
   }
