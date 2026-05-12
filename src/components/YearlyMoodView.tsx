@@ -9,7 +9,7 @@ import {
   isSameMonth,
   isSameDay,
 } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
+
 import { ChevronLeft, ChevronRight, Smile, Filter, RotateCcw } from 'lucide-react';
 import type { MoodEntry } from '../types';
 
@@ -185,8 +185,6 @@ export function YearlyMoodView({ entries, onSelectDate }: YearlyMoodViewProps) {
   }, [filteredEntries]);
 
   const totalScored = stats.totalDays;
-  const maxDistribution = Math.max(...Object.values(stats.distribution), 1);
-
   const toggleScore = (score: number) => {
     setFilterScores((prev) =>
       prev.includes(score) ? prev.filter((s) => s !== score) : [...prev, score]

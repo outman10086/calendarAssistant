@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { parseIntent } from '../lib/intentParser';
 import type { MoodEntry, MoodEvent } from '../types';
-import { Save, X, Trash2, Plus, Frown, Meh, Smile, Laugh, Annoyed, Wand2, Sun, Sunset, Moon } from 'lucide-react';
+import { Save, X, Trash2, Plus, Frown, Meh, Smile, Laugh, Annoyed, Wand2, Sun, Moon } from 'lucide-react';
 
 interface MoodFormProps {
   date: string;

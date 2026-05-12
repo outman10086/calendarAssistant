@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  KeyRound, UserPlus, ArrowRight, Copy, Check, Upload, Download,
+  Copy, Check, Upload, Download,
   X, Clock, Pencil, Trash2, History, ChevronRight, Sparkles, Edit3,
 } from 'lucide-react';
 

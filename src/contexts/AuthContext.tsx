@@ -65,10 +65,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // 自动将当前同步码加入历史记录（如果尚未记录）
           setSyncHistory(prev => {
             if (prev.some(h => h.code === res.sync_code)) return prev;
-            const updated = [{
+            const updated: SyncHistoryItem[] = [{
               code: res.sync_code,
               description: '',
               created_at: new Date().toISOString(),
+              user_id: res.user.id,
             }, ...prev];
             saveSyncHistory(updated);
             return updated;

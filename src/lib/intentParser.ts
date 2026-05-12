@@ -214,27 +214,6 @@ function parseTime(text: string, baseDate: Date): string {
   return toLocalDatetimeString(result);
 }
 
-function parseMoodScore(text: string): number | undefined {
-  const scoreMap: Record<string, number> = {
-    '超棒': 5, '非常好': 5, '很棒': 5, '开心': 5, '超开心': 5,
-    '不错': 4, '挺好': 4, '还好': 4, '好': 4, '可以': 4,
-    '一般': 3, '还行': 3, '普通': 3, '凑合': 3, '平平淡淡': 3,
-    '不太好': 2, '有点糟': 2, '郁闷': 2, '难过': 2, '烦': 2,
-    '很糟': 1, '糟糕': 1, '太差': 1, '崩溃': 1, '绝望': 1,
-  };
-
-  for (const [phrase, score] of Object.entries(scoreMap)) {
-    if (text.includes(phrase)) return score;
-  }
-
-  if (text.includes('开心') || text.includes('高兴') || text.includes('快乐')) return 4;
-  if (text.includes('难过') || text.includes('伤心') || text.includes('哭')) return 2;
-  if (text.includes('生气') || text.includes('愤怒') || text.includes('火大')) return 1;
-  if (text.includes('平静') || text.includes('淡定')) return 3;
-
-  return undefined;
-}
-
 function extractTitle(text: string): string {
   let title = text
     .replace(/明天|后天|大后天|今天|下周[一二三四五六日]|星期[一二三四五六日]|\d{1,2}月\d{1,2}[日号]|\d{1,2}号|\d{1,2}天后/g, '')
